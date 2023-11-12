@@ -1,0 +1,5 @@
+# Ignore Visual Studio temporary cache folder
+.vs/
+
+# Ignore the x64 build output folder
+x64/
