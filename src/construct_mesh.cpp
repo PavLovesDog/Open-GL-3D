@@ -65,36 +65,45 @@ Mesh construct_cube() {
     return cube_mesh;
 }
 
-Mesh construct_pyramid() {
-    Mesh pyramid_mesh;
+Mesh construct_diamond() {
+    Mesh diamond_mesh;
 
     // Define the vertices of the pyramid
-    pyramid_mesh.vertices = {
+    diamond_mesh.vertices = {
         // Base - just like the bottom face of the cube
-        -0.5f, 0.0f, -0.5f, 0.0f, 0.0f,
-         0.5f, 0.0f, -0.5f, 1.0f, 0.0f,
-         0.5f, 0.0f,  0.5f, 1.0f, 1.0f,
-        -0.5f, 0.0f,  0.5f, 0.0f, 1.0f,
+        -0.5f, 0.0f, -0.5f, 0.0f, 0.0f, // 0
+         0.5f, 0.0f, -0.5f, 1.0f, 0.0f, // 1
+         0.5f, 0.0f,  0.5f, 1.0f, 1.0f, // 2
+        -0.5f, 0.0f,  0.5f, 0.0f, 1.0f, // 3
 
         // Apex - centered above the base
-         0.0f, 1.0f,  0.0f, 0.5f, 0.5f // The texture coordinates for the apex are arbitrary
+         0.0f, 1.0f,  0.0f, 0.5f, 0.5f, // 4 (The texture coordinates for the apex are arbitrary)
+
+         //Bottom apex
+        0.0f, -1.0f, 0.0f, 0.5f, 0.5f
     };
 
     // Define the indices for the pyramid
     // The base uses the first 4 vertices (0-3), and the apex is the 5th vertex (4)
-    pyramid_mesh.indices = {
-        // Base
-        0, 1, 2,
-        0, 2, 3,
+    diamond_mesh.indices = {
+        //// Base
+        //0, 1, 2,
+        //0, 2, 3,
 
-        // Sides - each side is a triangle composed of two base vertices and the apex
+        // Top Sides - each side is a triangle composed of two base vertices and the apex
         0, 1, 4, // Front
         1, 2, 4, // Right
         2, 3, 4, // Back
-        3, 0, 4  // Left
+        3, 0, 4,  // Left
+
+        //Bottom Sides
+        0, 1, 5, // Front
+        1, 2, 5, // Right
+        2, 3, 5, // Back
+        3, 0, 5  // Left
     };
 
-    pyramid_mesh.num_of_indices = pyramid_mesh.indices.size();
+    diamond_mesh.num_of_indices = diamond_mesh.indices.size();
 
-    return pyramid_mesh;
+    return diamond_mesh;
 }

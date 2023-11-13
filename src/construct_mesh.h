@@ -4,6 +4,6 @@
 #include "mesh.h"
 
 Mesh construct_cube();
-Mesh construct_pyramid();
+Mesh construct_diamond();
 
 #endif // !CONSTRUCT_MESH

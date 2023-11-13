@@ -17,9 +17,11 @@ const char* vertexShaderSource = "#version 330 core\n"
 "layout (location = 2) in vec2 aTexCord;\n"
 "out vec2 TexCoord;\n"
 "uniform mat4 model;\n"
+"uniform mat4 view;\n"
+"uniform mat4 projection;\n"
 "void main()\n"
 "{\n"
-"   gl_Position = model * vec4(aPos, 1.0);\n"
+"   gl_Position = projection * view * model * vec4(aPos, 1.0);\n"
 "   TexCoord = aTexCord;\n"
 "}\0";
 
@@ -42,6 +44,49 @@ unsigned int createEBO(const unsigned int* indices, size_t size);
 void setupVertexAttributes();
 unsigned int LoadTexture(const char* filename);
 
+#define SCREEN_WIDTH 960
+#define SCREEN_HEIGHT 640
+
+//Global camera variables
+float pitch = 0.0f;
+float yaw = -90.0f; // Initialized to -90 because a yaw of 0 results in a direction vector pointing to the right
+glm::vec3 cameraFront = glm::vec3(0.0f, 0.0f, -1.0f);
+
+// Mouse callback function that matches GLFW's expected signature
+void mouse_callback(GLFWwindow* window, double xpos, double ypos) {
+    static float lastX = 400, lastY = 300; // Assume the window starts at 800x600 resolution, so this is the center
+    static bool firstMouse = true;
+
+    if (firstMouse) {
+        lastX = xpos;
+        lastY = ypos;
+        firstMouse = false;
+    }
+
+    float xoffset = xpos - lastX;
+    float yoffset = lastY - ypos; // Reversed since y-coordinates go from bottom to top
+    lastX = xpos;
+    lastY = ypos;
+
+    const float sensitivity = 0.1f;
+    xoffset *= sensitivity;
+    yoffset *= sensitivity;
+
+    yaw += xoffset;
+    pitch += yoffset;
+
+    // Make sure that when pitch is out of bounds, screen doesn't get flipped
+    if (pitch > 89.0f)
+        pitch = 89.0f;
+    if (pitch < -89.0f)
+        pitch = -89.0f;
+
+    glm::vec3 front;
+    front.x = cos(glm::radians(yaw)) * cos(glm::radians(pitch));
+    front.y = sin(glm::radians(pitch));
+    front.z = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
+    cameraFront = glm::normalize(front);
+}
 
 int main(void)
 {
@@ -52,7 +97,7 @@ int main(void)
         return -1;
  
     /* Create a windowed mode window and its OpenGL context */
-    window = glfwCreateWindow(960, 640, "OPenGL", NULL, NULL);
+    window = glfwCreateWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "OPenGL", NULL, NULL);
     if (!window)
     {
         glfwTerminate();
@@ -77,7 +122,7 @@ int main(void)
     //Set up meshes
     // -------------
     Mesh cube_mesh = construct_cube();
-    Mesh pyramid_mesh = construct_pyramid();
+    Mesh diamond_mesh = construct_diamond();
 
     // set up vertex data (and buffer(s)) and configure vertex attributes
     // ------------------------------------------------------------------
@@ -91,9 +136,9 @@ int main(void)
     glBindVertexArray(0); // Unbind the VAO to prevent accidental changes to it.
 
     //PYRAMID
-    unsigned int pyramidVAO = createVAO();
-    unsigned int pyramidVBO = createVBO(pyramid_mesh.vertices.data(), pyramid_mesh.vertices.size() * sizeof(float));
-    unsigned int pyramidEBO = createEBO(pyramid_mesh.indices.data(), pyramid_mesh.indices.size() * sizeof(unsigned int));
+    unsigned int diamondVAO = createVAO();
+    unsigned int diamondVBO = createVBO(diamond_mesh.vertices.data(), diamond_mesh.vertices.size() * sizeof(float));
+    unsigned int diamondEBO = createEBO(diamond_mesh.indices.data(), diamond_mesh.indices.size() * sizeof(unsigned int));
     setupVertexAttributes();
     glBindVertexArray(0);
 
@@ -104,36 +149,49 @@ int main(void)
     // load and create a texture 
     // -------------------------
     unsigned int cubeTexture = LoadTexture("texture.crate.jpg");
-    unsigned int pyramidTexture = LoadTexture("texture.wall.jpg");
+    unsigned int diamondTexture = LoadTexture("texture.wall.jpg");
 
     // note that this is allowed, the call to glVertexAttribPointer registered VBO as the vertex attribute's bound vertex buffer object so afterwards we can safely unbind
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 
-    // remember: do NOT unbind the EBO while a VAO is active as the bound element buffer object IS stored in the VAO; keep the EBO bound.
-    //glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+    {
+        // remember: do NOT unbind the EBO while a VAO is active as the bound element buffer object IS stored in the VAO; keep the EBO bound.
+        //glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 
-    // You can unbind the VAO afterwards so other VAO calls won't accidentally modify this VAO, but this rarely happens. Modifying other
-    // VAOs requires a call to glBindVertexArray anyways so we generally don't unbind VAOs (nor VBOs) when it's not directly necessary.
-    //glBindVertexArray(0);
+        // You can unbind the VAO afterwards so other VAO calls won't accidentally modify this VAO, but this rarely happens. Modifying other
+        // VAOs requires a call to glBindVertexArray anyways so we generally don't unbind VAOs (nor VBOs) when it's not directly necessary.
+        //glBindVertexArray(0);
 
-    // uncomment this call to draw in wireframe polygons.
-    //glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+        // uncomment this call to draw in wireframe polygons.
+        //glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+    }
 
     //Enable depth test for 3D rendering
     glEnable(GL_DEPTH_TEST);
 
-    // Variables to keep track of the rotation angles around each axis.
+    // Matrix Transformstion Variables
+    //camera
+    glm::vec3 cameraPos = glm::vec3(0.0f, 0.0f, 3.0f);
+    glm::vec3 cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);
+    float cameraSpeed = 0.05f; // Adjust as needed
     //cube
-    float cubeRotationX = 0.0f;
-    float cubeRotationY = 0.0f;
-    glm::vec3 cubeScale = glm::vec3(1.0f,1.0f, 1.0f);
+    float cubeRotationX = 0.5f;
+    float cubeRotationY = 0.5f;
+    glm::vec3 cubeScale = glm::vec3(0.5f,0.5f, 0.5f);
     //pyramid
-    float pyramidRotationX = 0.0f;
-    float pyramidRotationY = 0.0f;
+    float diamondRotationX = 0.0f;
+    float diamondRotationY = 0.0f;
+    glm::vec3 diamondScale = glm::vec3(0.5f, 0.5f, 0.5f);
 
     // get model location
     glUseProgram(shaderProgram); // Use the shader program
-    unsigned int modelLoc = glGetUniformLocation(shaderProgram, "model");
+    unsigned int modelLoc = glGetUniformLocation(shaderProgram, "model"); // get model location from vert shader
+    unsigned int viewLoc = glGetUniformLocation(shaderProgram, "view");
+    unsigned int projectionLoc = glGetUniformLocation(shaderProgram, "projection");
+
+    //Mouse specifics for camera
+    glfwSetCursorPosCallback(window, mouse_callback); // listen for mouse input
+    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED); // disable mouse on screen
 
     // render loop
     // -----------
@@ -141,39 +199,48 @@ int main(void)
     {
         // input
         // -----
+        // CAMERA
+        {
+            if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+                cameraPos += cameraSpeed * cameraFront;
+            if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+                cameraPos -= cameraSpeed * cameraFront;
+            if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+                cameraPos -= glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed;
+            if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+                cameraPos += glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed;
+        }
         // CUBE
         {
             // --- Rotations
-            if (glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS)
+            if (glfwGetKey(window, GLFW_KEY_KP_8) == GLFW_PRESS)
                 cubeRotationX += 1.0f; // Increase rotation angle around the X-axis
-            if (glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS)
+            if (glfwGetKey(window, GLFW_KEY_KP_5) == GLFW_PRESS)
                 cubeRotationX -= 1.0f; // Decrease rotation angle around the X-axis
-            if (glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS)
+            if (glfwGetKey(window, GLFW_KEY_KP_6) == GLFW_PRESS)
                 cubeRotationY += 1.0f; // Increase rotation angle around the Y-axis
-            if (glfwGetKey(window, GLFW_KEY_LEFT) == GLFW_PRESS)
+            if (glfwGetKey(window, GLFW_KEY_KP_4) == GLFW_PRESS)
                 cubeRotationY -= 1.0f; // Decrease rotation angle around the Y-axis
             // --- Scale
-            if (glfwGetKey(window, GLFW_KEY_EQUAL) == GLFW_PRESS)
+            if (glfwGetKey(window, GLFW_KEY_KP_ADD) == GLFW_PRESS)
                 cubeScale += glm::vec3(0.01f); // Use smaller increments if 0.1 is too large
-            if (glfwGetKey(window, GLFW_KEY_MINUS) == GLFW_PRESS)
+            if (glfwGetKey(window, GLFW_KEY_KP_SUBTRACT) == GLFW_PRESS)
                 cubeScale -= glm::vec3(0.01f); // Don't allow the scale to go negative!
         }
-        //PYRAMID
+        //DIAMOND
         {
             // --- Rotations
-            if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
-                pyramidRotationX += 1.0f; // Increase rotation angle around the X-axis
-            if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
-                pyramidRotationX -= 1.0f; // Decrease rotation angle around the X-axis
-            if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
-                pyramidRotationY += 1.0f; // Increase rotation angle around the Y-axis
-            if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
-                pyramidRotationY -= 1.0f; // Decrease rotation angle around the Y-axis
+            if (glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS)
+                diamondRotationX += 1.0f; // Increase rotation angle around the X-axis
+            if (glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS)
+                diamondRotationX -= 1.0f; // Decrease rotation angle around the X-axis
+            if (glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS)
+                diamondRotationY += 1.0f; // Increase rotation angle around the Y-axis
+            if (glfwGetKey(window, GLFW_KEY_LEFT) == GLFW_PRESS)
+                diamondRotationY -= 1.0f; // Decrease rotation angle around the Y-axis
         }
-        //processInput(window);
 
-        // render
-        // ------
+        //clear buffers
         glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // Clear color and depth buffers
 
@@ -184,9 +251,26 @@ int main(void)
         glActiveTexture(GL_TEXTURE0); // Activate the first texture unit
         glUniform1i(glGetUniformLocation(shaderProgram, "texture1"), 0);
 
+        // Camera Matrix setup
+        // -------------------
+        // Create view matrix
+        //glm::mat4 view = glm::mat4(1.0f);
+        //view = glm::translate(view, glm::vec3(0.0f, 0.0f, -3.0f)); // Move the camera "backwards" from the origin
+        glm::mat4 view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
+
+        // Create projection matrix
+        glm::mat4 projection = glm::mat4(1.0f);
+        projection = glm::perspective(glm::radians(45.0f), (float)SCREEN_WIDTH / (float)SCREEN_HEIGHT, 0.1f, 100.0f);
+
+        // Pass the view and projection matrices to the shader
+        glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glm::value_ptr(view));
+        glUniformMatrix4fv(projectionLoc, 1, GL_FALSE, glm::value_ptr(projection));
+
+        // render
+        // ------
         // Cube
-        glBindTexture(GL_TEXTURE_2D, cubeTexture); // Bind the cube's texture
         glBindVertexArray(cubeVAO); // Bind the cube's VAO
+        glBindTexture(GL_TEXTURE_2D, cubeTexture); // Bind the cube's texture
         // Set the cube's transformations
         glm::mat4 cubeModel = glm::mat4(1.0f);
         cubeModel = glm::translate(cubeModel, glm::vec3(0.0f,0.0f,0.0f)); // Position the cube (static for now)
@@ -197,20 +281,19 @@ int main(void)
         glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(cubeModel)); // Set the cube model matrix uniform
         glDrawElements(GL_TRIANGLES, cube_mesh.num_of_indices, GL_UNSIGNED_INT, 0); // Draw the cube
 
-        // Pyramid
-        glBindTexture(GL_TEXTURE_2D, pyramidTexture); // Bind the pyramid's texture
-        glBindVertexArray(pyramidVAO); // Bind the pyramid's VAO
-        // Set the pyramid's transformations
-        glm::mat4 pyramidModel = glm::mat4(1.0f);
-        pyramidModel = glm::translate(pyramidModel, glm::vec3(-0.5f, -0.5f, 0.5f)); // Position the pyramid
-        pyramidModel = glm::rotate(pyramidModel, glm::radians(pyramidRotationX), glm::vec3(1.0f, 0.0f, 0.0f));// rotation
-        pyramidModel = glm::rotate(pyramidModel, glm::radians(pyramidRotationY), glm::vec3(0.0f, 1.0f, 0.0f));
-        //scale
+        // Diamond
+        glBindVertexArray(diamondVAO); // Bind the diamond's VAO
+        glBindTexture(GL_TEXTURE_2D, diamondTexture); // Bind the diamond's texture
+        // Set the diamond's transformations
+        glm::mat4 pyramidModel = glm::mat4(1.0f); // model matrix
+        pyramidModel = glm::translate(pyramidModel, glm::vec3(-1.0f, 0.0f, 0.5f)); // Position the diamond
+        pyramidModel = glm::rotate(pyramidModel, glm::radians(diamondRotationX), glm::vec3(1.0f, 0.0f, 0.0f));// rotation
+        pyramidModel = glm::rotate(pyramidModel, glm::radians(diamondRotationY), glm::vec3(0.0f, 1.0f, 0.0f));
+        pyramidModel = glm::scale(pyramidModel, diamondScale); // Scale
         //Set the model matrix for each object right before you draw it.
         glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(pyramidModel));
-        glDrawElements(GL_TRIANGLES, pyramid_mesh.num_of_indices, GL_UNSIGNED_INT, 0); // Draw the pyramid
+        glDrawElements(GL_TRIANGLES, diamond_mesh.num_of_indices, GL_UNSIGNED_INT, 0); // Draw the diamond
         
-
         //// Sphere
         //glBindTexture(GL_TEXTURE_2D, sphereTexture); // Bind the sphere's texture
         //glBindVertexArray(sphereVAO); // Bind the sphere's VAO
@@ -229,17 +312,19 @@ int main(void)
 
     // optional: de-allocate all resources once they've outlived their purpose:
     // ------------------------------------------------------------------------
-    glDeleteVertexArrays(1, &cubeVAO);
+    glDeleteVertexArrays(1, &cubeVAO); // ---- Cube
     glDeleteBuffers(1, &cubeVBO);
     glDeleteBuffers(1, &cubeEBO);
-    glDeleteProgram(shaderProgram);
+    glDeleteVertexArrays(1, &diamondVAO); // ---- Diamond
+    glDeleteBuffers(1, &diamondVBO);
+    glDeleteBuffers(1, &diamondEBO);
+    glDeleteProgram(shaderProgram); // ---- Shader Program
 
     // glfw: terminate, clearing all previously allocated GLFW resources.
     // ------------------------------------------------------------------
     glfwTerminate();
     return 0;
 }
-
 
 unsigned int CompileShaders(const char* vertexShaderSource, const char* fragmentShaderSource) {
     // vertex shader
