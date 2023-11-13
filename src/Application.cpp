@@ -10,6 +10,7 @@
 
 //header files
 #include "construct_mesh.h"
+#include "camera.h"
 
 //VERTEX SHADER
 const char* vertexShaderSource = "#version 330 core\n"
@@ -47,14 +48,12 @@ unsigned int LoadTexture(const char* filename);
 #define SCREEN_WIDTH 960
 #define SCREEN_HEIGHT 640
 
-//Global camera variables
-float pitch = 0.0f;
-float yaw = -90.0f; // Initialized to -90 because a yaw of 0 results in a direction vector pointing to the right
-glm::vec3 cameraFront = glm::vec3(0.0f, 0.0f, -1.0f);
+// Define a global Camera instance
+Camera camera(glm::vec3(0.0f, 0.0f, 3.0f), glm::vec3(0.0f, 1.0f, 0.0f), -90.0f, 0.0f);
 
-// Mouse callback function that matches GLFW's expected signature
+// Mouse callback to update the Camera instance
 void mouse_callback(GLFWwindow* window, double xpos, double ypos) {
-    static float lastX = 400, lastY = 300; // Assume the window starts at 800x600 resolution, so this is the center
+    static float lastX = 400, lastY = 300;
     static bool firstMouse = true;
 
     if (firstMouse) {
@@ -64,28 +63,11 @@ void mouse_callback(GLFWwindow* window, double xpos, double ypos) {
     }
 
     float xoffset = xpos - lastX;
-    float yoffset = lastY - ypos; // Reversed since y-coordinates go from bottom to top
+    float yoffset = lastY - ypos;
     lastX = xpos;
     lastY = ypos;
 
-    const float sensitivity = 0.1f;
-    xoffset *= sensitivity;
-    yoffset *= sensitivity;
-
-    yaw += xoffset;
-    pitch += yoffset;
-
-    // Make sure that when pitch is out of bounds, screen doesn't get flipped
-    if (pitch > 89.0f)
-        pitch = 89.0f;
-    if (pitch < -89.0f)
-        pitch = -89.0f;
-
-    glm::vec3 front;
-    front.x = cos(glm::radians(yaw)) * cos(glm::radians(pitch));
-    front.y = sin(glm::radians(pitch));
-    front.z = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
-    cameraFront = glm::normalize(front);
+    camera.ProcessMouseMovement(xoffset, yoffset);
 }
 
 int main(void)
@@ -170,6 +152,7 @@ int main(void)
     glEnable(GL_DEPTH_TEST);
 
     // Matrix Transformstion Variables
+    // -------------------------------
     //camera
     glm::vec3 cameraPos = glm::vec3(0.0f, 0.0f, 3.0f);
     glm::vec3 cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);
@@ -189,26 +172,29 @@ int main(void)
     unsigned int viewLoc = glGetUniformLocation(shaderProgram, "view");
     unsigned int projectionLoc = glGetUniformLocation(shaderProgram, "projection");
 
-    //Mouse specifics for camera
+    // Set the mouse callback
+    // ----------------------
     glfwSetCursorPosCallback(window, mouse_callback); // listen for mouse input
     glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED); // disable mouse on screen
 
+    //Delta Time Variables
+    float lastFrame = 0.0f; // Time of last frame
+    float deltaTime = 0.0f; // Time difference between current and last frame
+
     // render loop
-    // -----------
+    // -----------------------------------------------------------------------------------------------
     while (!glfwWindowShouldClose(window))
     {
         // input
         // -----
         // CAMERA
         {
-            if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
-                cameraPos += cameraSpeed * cameraFront;
-            if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
-                cameraPos -= cameraSpeed * cameraFront;
-            if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
-                cameraPos -= glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed;
-            if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
-                cameraPos += glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed;
+            // Calculate delta time
+            float currentFrame = glfwGetTime();
+            deltaTime = currentFrame - lastFrame;
+            lastFrame = currentFrame;
+
+            camera.ProcessKeyboard(window, deltaTime);
         }
         // CUBE
         {
@@ -253,10 +239,8 @@ int main(void)
 
         // Camera Matrix setup
         // -------------------
-        // Create view matrix
-        //glm::mat4 view = glm::mat4(1.0f);
-        //view = glm::translate(view, glm::vec3(0.0f, 0.0f, -3.0f)); // Move the camera "backwards" from the origin
-        glm::mat4 view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
+        // Create view matrix, set it to camera instance
+        glm::mat4 view = camera.GetViewMatrix();
 
         // Create projection matrix
         glm::mat4 projection = glm::mat4(1.0f);

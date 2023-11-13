@@ -132,10 +132,12 @@
   <ItemGroup>
     <ClCompile Include="rsc\stb_image.cpp" />
     <ClCompile Include="src\Application.cpp" />
+    <ClCompile Include="src\camera.cpp" />
     <ClCompile Include="src\construct_mesh.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="rsc\stb_image.h" />
+    <ClInclude Include="src\camera.h" />
     <ClInclude Include="src\construct_mesh.h" />
     <ClInclude Include="src\mesh.h" />
   </ItemGroup>

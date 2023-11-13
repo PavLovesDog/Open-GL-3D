@@ -1,5 +1,6 @@
 #include "camera.h"
 
+//Constructor with vectors
 Camera::Camera(glm::vec3 startPosition, glm::vec3 startUp, float startYaw, float startPitch)
     : Front(glm::vec3(0.0f, 0.0f, -1.0f)), MovementSpeed(2.5f), MouseSensitivity(0.1f), Yaw(startYaw), Pitch(startPitch) {
     Position = startPosition;
@@ -7,10 +8,12 @@ Camera::Camera(glm::vec3 startPosition, glm::vec3 startUp, float startYaw, float
     updateCameraVectors();
 }
 
+// Returns the view matrix calculated using Euler Angles and the LookAt Matrix
 glm::mat4 Camera::GetViewMatrix() {
     return glm::lookAt(Position, Position + Front, Up);
 }
 
+// Processes input received from any keyboard-like input system
 void Camera::ProcessKeyboard(GLFWwindow* window, float deltaTime) {
     float velocity = MovementSpeed * deltaTime;
     if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
@@ -23,6 +26,7 @@ void Camera::ProcessKeyboard(GLFWwindow* window, float deltaTime) {
         Position += Right * velocity;
 }
 
+// Processes input received from a mouse input system
 void Camera::ProcessMouseMovement(float xOffset, float yOffset) {
     xOffset *= MouseSensitivity;
     yOffset *= MouseSensitivity;
@@ -38,6 +42,7 @@ void Camera::ProcessMouseMovement(float xOffset, float yOffset) {
     updateCameraVectors();
 }
 
+// Update Front, Right and Up Vectors using the updated Euler angles
 void Camera::updateCameraVectors() {
     glm::vec3 front;
     front.x = cos(glm::radians(Yaw)) * cos(glm::radians(Pitch));
