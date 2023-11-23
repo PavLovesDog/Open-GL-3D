@@ -3,6 +3,7 @@
 
 #include <vector>
 
+//Mesh struct to hold mesh data
 typedef struct Mesh {
     std::vector<float> vertices;
     std::vector<unsigned int> indices;
